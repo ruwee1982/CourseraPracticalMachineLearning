@@ -1,0 +1,129 @@
+---
+title: "CourseraPredictionAssignment"
+author: "New Ru Wee"
+date: "9/7/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Loading Dataset
+```{r, echo = TRUE}
+library(caret)
+
+set.seed(123)
+
+train <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"), na.strings=c("NA","","#DIV/0!"))
+train <- train[, colSums(is.na(train)) == 0]
+# View(train)
+# dim(train)
+names(train)
+
+validation <- read.csv(url("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"), na.strings=c("NA","","#DIV/0!"))
+validation <- validation[, colSums(is.na(validation))==0]
+# View(test)
+# dim(test)
+
+splitIndex  <- createDataPartition(train$classe, p=0.7, list=FALSE)
+train_set <- train[ splitIndex, ]
+test_set  <- train[-splitIndex, ]
+
+
+```
+
+# EDA
+```{r, echo = TRUE}
+library(skimr)
+skimmed <- skim(train_set)
+skimmed
+
+```
+
+# Removing the first 6 columns
+```{r, echo = TRUE}
+
+train_set <- train_set[, -(1:6)]
+test_set  <- test_set[, -(1:6)]
+dim(train_set)
+# dim(test_set)
+
+```
+# Finding highly correlated features
+
+```{r, echo = TRUE}
+set.seed(7)
+# calculate correlation matrix
+correlationMatrix <- cor(train_set[,-54])
+# summarize the correlation matrix
+print(correlationMatrix)
+# find attributes that are highly corrected (ideally >0.75)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.5)
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
+```
+
+
+
+# Building classification Model
+
+```{r, echo = TRUE}
+
+control <- trainControl(method="cv", number=10)
+metric <- "Accuracy"
+
+
+set.seed(7)
+fit.lda <- train(classe~., data=train_set, method="lda", metric=metric,trControl=control)
+
+# CART
+set.seed(7)
+fit.cart <- train(classe~., data=train_set, method="rpart", metric=metric, trControl=control)
+# kNN
+set.seed(7)
+fit.knn <- train(classe~., data=train_set, method="knn", metric=metric, trControl=control)
+
+# SVM
+set.seed(7)
+fit.svm <- train(classe~., data=train_set, method="svmRadial", metric=metric, trControl=control)
+# Random Forest
+set.seed(7)
+fit.rf <- train(classe~., data=train_set, method="rf", metric=metric, trControl=control)
+
+```
+
+# Comparing results between models
+```{r, echo = TRUE}
+results <- resamples(list(lda=fit.lda, cart=fit.cart, knn=fit.knn, svm=fit.svm, rf=fit.rf))
+summary(results)
+```
+
+```{r, echo = TRUE}
+
+dotplot(results)
+```
+
+# PRINTING BEST RESULTS
+From the dotplot, random forest model yields the best results.
+
+```{r, echo = TRUE}
+print(fit.rf)
+
+```
+
+# MAKING PREDICTIONS on the test_set to get the Confusion Matrix
+```{r, echo = TRUE}
+predictions_test <- predict(fit.rf, test_set)
+confusionMatrix(predictions_test, as.factor(test_set$classe))
+```
+
+# MAKING PREDICTIONS on the validation_set to answer the quiz
+```{r, echo = TRUE}
+
+predictions <- predict(fit.rf, validation)
+predictions 
+
+```
